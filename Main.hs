@@ -62,27 +62,16 @@ dbgloop s= do
       otherwise -> dbgloop s
 loop :: State -> IO (State)
 loop s= do
+  drawScreen (screen s) (pixels s)
+  st <- return (tickDT s)
+  st <- execute (getInst (pc st) (mem st)) st
   SDL.delay 1
   event <- getEvent
   case event of
-    SDL.Quit -> return s
-    SDL.KeyDown k -> do
+    SDL.Quit -> return st
+    SDL.KeyDown k -> 
       if (SDL.symKey k) == SDL.SDLK_ESCAPE
-        then return s
-        else do
-          st <- return (keyDown s keyMap (SDL.symKey k))
-          drawScreen (screen s) (pixels s)
-          st <- return (tickDT st)
-          st <- execute (getInst (pc st) (mem st)) st
-          loop st
-    SDL.KeyUp k -> do
-      st <- return (keyUp s keyMap (SDL.symKey k))
-      drawScreen (screen s) (pixels s)
-      st <- return (tickDT st)
-      st <- execute (getInst (pc st) (mem st)) st
-      loop st
-    otherwise -> do
-      drawScreen (screen s) (pixels s)
-      st <- return (tickDT s)
-      st <- execute (getInst (pc st) (mem st)) st
-      loop st
+        then return st
+        else loop (keyDown st keyMap (SDL.symKey k))
+    SDL.KeyUp k -> loop (keyUp s keyMap (SDL.symKey k))
+    otherwise -> loop st
