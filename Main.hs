@@ -9,7 +9,7 @@ main :: IO()
 main = do
   args <- getArgs
   if null args then
-    putStrLn "usage: Chip8 rom [-d]"
+    putStrLn "usage: Chip8 rom [debug]"
   else do
     (rom:_) <- getArgs
     SDL.init [SDL.InitEverything]

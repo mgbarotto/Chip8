@@ -15,7 +15,7 @@ Install using cabal
     cabal install 
     sudo ln -s ~/.cabal/bin/Chip8 /usr/bin/
 ## Usage
-    Chip8 romfile
+    Chip8 romfile [debug]
 
 ## Some ROMs
  [Zophar's ROMs](http://www.zophar.net/pdroms/chip8/chip-8-games-pack.html)
