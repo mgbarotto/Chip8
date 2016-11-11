@@ -1,0 +1,7 @@
+tut/
+*.o
+*.hi
+Setup
+Chip8
+dist/
+Roms/
