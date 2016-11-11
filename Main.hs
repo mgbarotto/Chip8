@@ -1,9 +1,6 @@
---TODO: Mover el codigo a diferentes modulos
 module Main (main) where
-import Data.Function
 import System.Exit
 import System.Environment (getArgs)
-import qualified Graphics.UI.SDL as SDL
 import qualified Graphics.UI.SDL as SDL
 import EmuData
 import EmuProcessor
@@ -12,9 +9,8 @@ main :: IO()
 main = do
   args <- getArgs
   if null args then
-    putStrLn "usage: Chip8 rom"
+    putStrLn "usage: Chip8 rom [-d]"
   else do
-    putStrLn $ show args
     (rom:_) <- getArgs
     SDL.init [SDL.InitEverything]
     scr <- SDL.setVideoMode screenW screenH 32 [SDL.SWSurface]
@@ -34,7 +30,10 @@ main = do
     state <- return (loadToMem charMap 0x0 initialState)
     inst <- fileOpen rom
     state <- return(loadToMem inst 0x200 state)
-    loop state
+    if elem "debug" args
+      then dbgloop state 
+    else
+      loop state
     SDL.quit
 
 
