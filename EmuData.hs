@@ -5,7 +5,7 @@ import Data.Map(Map, fromList)
 --Color de fondo de la pantalla
 fgColor   = 0xFFFFFFFF :: Word32
 --Color de dibujo en pantalla
-bgColor   = 0xFFFF0F0F :: Word32
+bgColor   = 0xFF000000 :: Word32
 --Tamaño en pixeles reales de cada pixel emulado
 pixelSize = 8::Int
 --Cantidad de pixeles que contiene la pantalla
