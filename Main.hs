@@ -1,6 +1,7 @@
 module Main (main) where
 import System.Exit
 import System.Environment (getArgs)
+import System.FilePath (takeBaseName)
 import qualified Graphics.UI.SDL as SDL
 import EmuData
 import EmuProcessor
@@ -13,6 +14,7 @@ main = do
   else do
     (rom:_) <- getArgs
     SDL.init [SDL.InitEverything]
+    SDL.setCaption (takeBaseName rom) ""
     scr <- SDL.setVideoMode screenW screenH 32 [SDL.SWSurface]
     let initialState =  State {
       screen = scr,
