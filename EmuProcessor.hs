@@ -37,12 +37,11 @@ waitForKey :: State -> IO(State, SDL.SDLKey)
 waitForKey s = do
   event <- getEvent
   case event of
-    SDL.Quit -> do
-      return (s, SDL.SDLK_ESCAPE)
-    SDL.KeyDown k -> return ((keyDown s keyMap (SDL.symKey k)), SDL.symKey k)
+    SDL.Quit -> return (s, SDL.SDLK_ESCAPE)
+    SDL.KeyDown k -> return (keyDown s keyMap (SDL.symKey k), SDL.symKey k)
     SDL.KeyUp k -> waitForKey (keyUp s keyMap (SDL.symKey k))
-    otherwise -> do
-      st <- return (tickDT s)
+    _ -> do
+      let st = tickDT s
       waitForKey st
 
 
@@ -54,11 +53,11 @@ getEvent = do
     (SDL.KeyDown _)-> return e
     (SDL.KeyUp _)-> return e
     SDL.NoEvent -> return e
-    otherwise -> getEvent
+    _ -> getEvent
 -- Manejo de instrucciones
-execute :: Word16 -> State -> IO(State)
+execute :: Word16 -> State -> IO State
 execute ins s=
-  case (showHex ins "") of
+  case showHex ins "" of
     --0NNN  Calls RCA 1802 program at address NNN. Not necessary for most ROMs.
     nnn@[_, _, _] -> return (advancePC s) --Esta instruccion se ignora y es innecesario especificarla, la dejo por completitud
    --00E0  Clears the screen.
@@ -84,10 +83,10 @@ execute ins s=
     ['8',_,_,'0'] -> return (advancePC (setReg s x (getReg s  y)))
    --8XY1  Sets VX to VX or VY.
     ['8',_,_,'1'] -> return (advancePC (
-                      setReg s x ((getReg s  y).|.(getReg s  x))))
+                      setReg s x (getReg s  y .|. getReg s  x)))
    --8XY2  Sets VX to VX and VY.
     ('8':_:_:"2") -> return (advancePC (
-                      setReg s x ((getReg s  y).&.(getReg s  x))))
+                      setReg s x (getReg s  y.&. getReg s  x)))
      --8XY3  Sets VX to VX xor VY.
     ('8':_:_:"3") -> return (advancePC (
                       setReg s x (xor (getReg s y) (getReg s  x))))
@@ -106,7 +105,7 @@ execute ins s=
      --ANNN  Sets I to the address NNN.
     ('a':_)       -> return (advancePC (setI s n))
      --BNNN  Jumps to the address NNN plus V0.
-    ('b':_)       -> return (setPC s (n+(asWord16(getReg s 0))))
+    ('b':_)       -> return (setPC s (n+ asWord16(getReg s 0)))
      --CXNN  Sets VX to the result of a bitwise and operation on a random number --and NN.
     ('c':_)       -> do
                      ran <- randomIO :: IO Word8
@@ -118,7 +117,7 @@ execute ins s=
      --pixels are flipped from set to unset when the sprite is drawn, and to 0 if 
      --that doesn’t happen
     ('d':_)       -> do
-                     sprite <- return ( map toBitsArray (loadFromMem (asInt (i s)) (asInt h) s))
+                     let sprite =  map toBitsArray (loadFromMem (asInt (i s)) (asInt h) s)
                      (st, coll) <- drawSprite s (getReg s x) (getReg s y) sprite
                      if coll
                        then return (advancePC (setReg st 0xf 1))
@@ -135,7 +134,7 @@ execute ins s=
                     if key == SDL.SDLK_ESCAPE
                       then do
                         SDL.quit
-                        return(s)
+                        return s
                       else do
                         let keyPos = asWord8 (fromMaybe 0 (Map.lookup key keyMap))
                         return (advancePC (setReg s x keyPos))
@@ -144,9 +143,9 @@ execute ins s=
      --FX18  Sets the sound timer to VX. --TODO: Implementar sonido
     ('f':_:"18") -> return (advancePC s)
      --FX1E  Adds VX to I.[3]
-    ('f':_:"1e") -> return (advancePC (setI s ((i s)+(asWord16 (getReg s x)))))
+    ('f':_:"1e") -> return (advancePC (setI s (i s +asWord16 (getReg s x))))
      --FX29  Sets I to the location of the sprite for the character in VX. --Characters 0-F (in hexadecimal) are represented by a 4x5 font.
-    ('f':_:"29") -> return (advancePC (setI s (asWord16 ((getReg s x) * 5))))
+    ('f':_:"29") -> return (advancePC (setI s (asWord16 (getReg s x * 5))))
      --FX33  Stores the binary-coded decimal representation of VX, with the most 
      --significant of three digits at the address in I, the middle digit at I plus 
      --1, and the least significant digit at I plus 2. (In other words, genericTake the 
@@ -154,16 +153,16 @@ execute ins s=
      --location in I, the tens digit at location I+1, and the ones digit at location I+2.)
     ('f':_:"33") -> do
                     let v = getReg s x
-                    let bcd = [(div v 100),(div (mod v 100) 10),(mod v 10)]
+                    let bcd = [div v 100, div (mod v 100) 10, mod v 10]
                     return (advancePC (loadToMem bcd (asInt (i s)) s))
      --FX55  Stores V0 to VX (including VX) in memory starting at address I.
     ('f':_:"55") -> return (advancePC (
-                    loadToMem ((genericTake (x+1) (vx s))) (asInt (i s)) s))
+                    loadToMem (genericTake (x+1) (vx s)) (asInt (i s)) s))
      --FX65  Fills V0 to VX (including VX) with values from memory starting at address I.
     ('f':_:"65") -> return (advancePC (
-                    s{vx=(loadFromMem (asInt (i s)) (asInt x+1) s)++
-                    (drop ((asInt x+1))  (vx s))}))
-    otherwise    -> return (advancePC s)
+                    s{vx=loadFromMem (asInt (i s)) (asInt x+1) s++
+                     drop (asInt x+1)  (vx s)}))
+    _ -> return (advancePC s)
   where x = getX ins
         y = getY ins
         n = getN ins
@@ -175,7 +174,7 @@ execute ins s=
 
 describe :: Word16 -> String
 describe ins =
-  case (showHex ins "") of
+  case showHex ins "" of
     nnn@[_, _, _] -> "Cargar RCA 1802 en "++nnn
     "e0" -> "Limpiar pantalla"
     "ee" -> "Regresar subrutina"
@@ -211,7 +210,7 @@ describe ins =
     ('f':x:"33")  -> "["++showHex ins ""++"] Guarda centenas de V"++[x]++" (decimal) en I, decenas en I+1, unidades en I+2"
     ('f':x:"55")  -> "["++showHex ins ""++"] Guarda valores de V0 a V"++[x]++" inclusive en memoria, empezando en I"
     ('f':x:"65")  -> "["++showHex ins ""++"] Settea valores de V0 a V"++[x]++" con los valores en memoria empezando en I"
-    otherwise     -> "["++showHex ins ""++"] Instruccion invalida (dec: "++ show ins++", hex:)"
+    _            -> "["++showHex ins ""++"] Instruccion invalida (dec: "++ show ins++", hex:)"
     where xx =show $ getX ins
           yy =show $ getY ins
           nn =show $ getN ins
@@ -224,7 +223,7 @@ getReg State{ vx = vx } x = getAt x vx
 setReg :: State -> Int -> Word8 -> State
 setReg s@State{ vx = vx } x v = s { vx = replaceAt x vx v }
 addToReg :: State -> Int -> Word8 -> State
-addToReg s x v = setReg s x ((getReg s x)+v)
+addToReg s x v = setReg s x (getReg s x + v)
 subFromReg :: State -> Int -> Word8 -> State
 subFromReg s x v = addToReg s x (-v)
 
@@ -242,7 +241,7 @@ sumReg :: State -> Int -> Int -> State
 sumReg s x y
   |v > 255 = setReg (setReg s x (asWord8 v)) 0xf 1
   |otherwise =  setReg (setReg s x (asWord8 v)) 0xf 0
-  where v = (asInt (getReg s x)) +(asInt (getReg s y))
+  where v = asInt (getReg s x) + asInt (getReg s y)
 
 subReg :: State -> Int -> Int -> Int -> State
 subReg s x y d
@@ -295,7 +294,7 @@ drawSprite state x y sprite = go (pixels state) 0 0 sprite False
     go p dx dy ((True:ps):r) c = do
       let px = mod (x+dx) (asWord8 pixelsW)
       let py = mod (y+dy) (asWord8 pixelsH)
-      go (togglePixel p px py ) (dx+1) dy (ps:r) (c || (getPixel p px py))
+      go (togglePixel p px py ) (dx+1) dy (ps:r) (c || getPixel p px py)
 
 
 
@@ -309,11 +308,10 @@ loadFromMem i r s = genericTake r $drop i m
   where m = mem s
 
 
-fileOpen :: FilePath -> IO ([Word8])
+fileOpen :: FilePath -> IO [Word8]
 fileOpen fp = do
   bs <- B.readFile fp
   return (B.unpack bs)
-
 
 getX i = fromIntegral $ shiftR (i.&.0x0F00) 8
 getY i = fromIntegral $ shiftR (i.&.0x00F0) 4
@@ -325,14 +323,14 @@ getH :: Word16 -> Word8
 getH i = fromIntegral (i.&.0xF)
 
 getInst :: Word16 -> [Word8] -> Word16
-getInst addr mem = (((shiftL (fromIntegral l) 8) + (fromIntegral r))::Word16)
+getInst addr mem = (shiftL (fromIntegral l) 8 + fromIntegral r)::Word16
   where l = mem !! fromIntegral addr
         r = mem !! fromIntegral (addr+1)
 
 addToStack :: Word16 -> State -> State
-addToStack addr state@State{pc=pc, sp=sp, stack=stack} = state {pc=addr,sp=(sp+1), stack = (replaceAt sp stack pc)}
+addToStack addr state@State{pc=pc, sp=sp, stack=stack} = state {pc=addr,sp=sp+1, stack = replaceAt sp stack pc}
 
-removeFromStack state@State{sp=sp, stack=stack} = state {pc = (getAt (sp-1) stack), sp=sp-1}
+removeFromStack state@State{sp=sp, stack=stack} = state {pc = getAt (sp-1) stack, sp=sp-1}
 
 skipOn :: (a->a->Bool)->a->a->State->State
 skipOn f a b s@State{pc=pc}
@@ -347,7 +345,7 @@ skipIf _ s@State{pc=pc}   = s{pc=pc+2}
 
 tickDT :: State -> State
 tickDT s@State{dt=0} = s
-tickDT s@State{dt=dt} = s{dt=(dt-1)}
+tickDT s@State{dt=dt} = s{dt=dt-1}
 
 setDT s v = s{dt=v}
 
@@ -356,23 +354,23 @@ keyDown :: State -> Map.Map SDL.SDLKey Int -> SDL.SDLKey -> State
 keyDown s km k
   | pos == -1 = s
   | otherwise = s{keyboard = replaceAt pos (keyboard s) True}
-  where pos = (fromMaybe 0 (Map.lookup k km))
+  where pos = fromMaybe 0 (Map.lookup k km)
 
 keyUp :: State -> Map.Map SDL.SDLKey Int -> SDL.SDLKey -> State
 keyUp s km k
   | pos == -1 = s
   | otherwise = s{keyboard = replaceAt pos (keyboard s) False}
-  where pos = (fromMaybe 0 (Map.lookup k km))
+  where pos = fromMaybe 0 (Map.lookup k km)
 
 -- Utilidad
-getAt x l = l !! (fromIntegral x)
+getAt x l = l !! fromIntegral x
 
 replaceAt x l v = y ++ [v] ++ z
   where ix = fromIntegral x
         (y,z) = (genericTake ix l, drop (ix+1) l)
-addAt x l v = replaceAt x l (v+(getAt x l))
+addAt x l v = replaceAt x l (v + getAt x l)
 toBitsArray :: Word8 -> [Bool]
 toBitsArray x = map (testBit x) [7,6..0]
-asInt x = (fromIntegral x)::Int
-asWord8 x = (fromIntegral x)::Word8
-asWord16 x = (fromIntegral x)::Word16
+asInt x = fromIntegral x::Int
+asWord8 x = fromIntegral x::Word8
+asWord16 x = fromIntegral x::Word16
